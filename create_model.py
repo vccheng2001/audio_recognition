@@ -155,15 +155,15 @@ class CNN(nn.Module):
 
 
 
-print('Creating model')
+print('1) Creating model.......')
 model = CNN(1,2)
 model.eval()
 example = torch.rand(5,120)
-print('tracing')
+print(f'2) Tracing model on random input of shape {example.shape}......')
 traced_script_module = torch.jit.trace(model, example)
-print('optimizing for mobile')
+print('3) Optimizing for Pytorch mobile......')
 traced_script_module_optimized = optimize_for_mobile(traced_script_module)
-print('saving optimized model')
+print('4) Saving optimized model....')
 traced_script_module_optimized._save_for_lite_interpreter("apnea_before_convert.ptl")
 
 
@@ -177,8 +177,9 @@ if convert2version5:
     MODEL_INPUT_FILE = "apnea_before_convert.ptl"
     MODEL_OUTPUT_FILE = "apnea.ptl"
 
-    print("Old model version: ", _get_model_bytecode_version(f_input=MODEL_INPUT_FILE))
+    print(f'5) Converting old model file "{MODEL_INPUT_FILE}" with version {_get_model_bytecode_version(f_input=MODEL_INPUT_FILE)}')
 
     _backport_for_mobile(f_input=MODEL_INPUT_FILE, f_output=MODEL_OUTPUT_FILE, to_version=5)
 
-    print("Converted model version: ", _get_model_bytecode_version(MODEL_OUTPUT_FILE))
+    print(f'Done converting to version {_get_model_bytecode_version(MODEL_OUTPUT_FILE)}')
+    print(f'Saving new model {MODEL_OUTPUT_FILE}')
