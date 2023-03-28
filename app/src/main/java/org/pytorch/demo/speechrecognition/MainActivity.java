@@ -14,19 +14,24 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
-
 import org.pytorch.IValue;
 import org.pytorch.Module;
 import org.pytorch.Tensor;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.FloatBuffer;
 
 import org.pytorch.LiteModuleLoader;
+import java.lang.String;
+import java.util.Arrays;
 
 
 public class MainActivity extends AppCompatActivity implements Runnable {
@@ -37,9 +42,14 @@ public class MainActivity extends AppCompatActivity implements Runnable {
     private Button mButton;
 
     private final static int REQUEST_RECORD_AUDIO = 13;
-    private final static int AUDIO_LEN_IN_SECOND = 6;
+    private final static int AUDIO_LEN_IN_SECOND = 15;
     private final static int SAMPLE_RATE = 16000;
     private final static int RECORDING_LENGTH = SAMPLE_RATE * AUDIO_LEN_IN_SECOND;
+    // downsample signal by 2000: 16000 / 2000 = 8 samples per sec
+
+    private final static int downsampleStepSize = 2000;
+    // (15 * 1600)= 240000 / 2000 = 120
+    private final static int downsampledRecordingLength = RECORDING_LENGTH / downsampleStepSize;
 
     private final static String LOG_TAG = MainActivity.class.getSimpleName();
 
@@ -133,9 +143,17 @@ public class MainActivity extends AppCompatActivity implements Runnable {
         return null;
     }
 
-    private void showTranslationResult(String result) {
-        mTextView.setText(result);
+
+    public void writeFile(String filename, float[] x) throws IOException{
+        Context context = getApplicationContext();
+
+        OutputStreamWriter outputStreamWriter = new OutputStreamWriter(context.openFileOutput(filename, Context.MODE_PRIVATE));
+        outputStreamWriter.write(Arrays.toString(x));
+        outputStreamWriter.close();
+        outputStreamWriter.close();
     }
+
+
 
     public void run() {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO);
@@ -152,8 +170,16 @@ public class MainActivity extends AppCompatActivity implements Runnable {
 
         long shortsRead = 0;
         int recordingOffset = 0;
+        // bufferSize: min number of bytes required for
+        // short: 16 bit (2 bytes). 1 short: 2 bytes
+
+        // num shorts that can fit all bytes
         short[] audioBuffer = new short[bufferSize / 2];
+        // sample rate * # seconds of recording
+        // 16000*15=240000
         short[] recordingBuffer = new short[RECORDING_LENGTH];
+
+        // read 16 bits (1 short) at a time
 
         while (shortsRead < RECORDING_LENGTH) {
             int numberOfShort = record.read(audioBuffer, 0, audioBuffer.length);
@@ -165,6 +191,7 @@ public class MainActivity extends AppCompatActivity implements Runnable {
         record.stop();
         record.release();
         stopTimerThread();
+        Log.e("LOG", "Stopped recording!");
 
         runOnUiThread(new Runnable() {
             @Override
@@ -173,40 +200,55 @@ public class MainActivity extends AppCompatActivity implements Runnable {
             }
         });
 
-        float[] floatInputBuffer = new float[RECORDING_LENGTH];
-
+        float[] floatInputBuffer = new float[downsampledRecordingLength];
         // feed in float values between -1.0f and 1.0f by dividing the signed 16-bit inputs.
-        for (int i = 0; i < RECORDING_LENGTH; ++i) {
-            floatInputBuffer[i] = recordingBuffer[i] / (float)Short.MAX_VALUE;
+        for (int i = 0; i < downsampledRecordingLength; ++i) {
+            floatInputBuffer[i] = recordingBuffer[i*2000] / (float)Short.MAX_VALUE; // 32767
         }
 
-        final String result = recognize(floatInputBuffer);
+        Log.e("LOG", "Writing input vector to file:");
+        try {
+            writeFile("input.txt", floatInputBuffer);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                showTranslationResult(result);
-                mButton.setEnabled(true);
-                mButton.setText("Start");
-            }
-        });
+        Log.e("LOG", "Running model inference!");
+
+        final IValue result = recognize(floatInputBuffer);
+        Log.e("LOG", "Got result!");
+
     }
 
-    private String recognize(float[] floatInputBuffer) {
+    private IValue recognize(float[] floatInputBuffer) {
+        Log.e("LOG", "Loading model file");
+
         if (module == null) {
-            module = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "wav2vec2_conv.ptl"));
+            module = LiteModuleLoader.load(assetFilePath(getApplicationContext(), "a.ptl"));
         }
 
-        double wav2vecinput[] = new double[RECORDING_LENGTH];
-        for (int n = 0; n < RECORDING_LENGTH; n++)
-            wav2vecinput[n] = floatInputBuffer[n];
-
-        FloatBuffer inTensorBuffer = Tensor.allocateFloatBuffer(RECORDING_LENGTH);
-        for (double val : wav2vecinput)
+        // model input must be tensor, allocate Tensor buffer and store float values
+        FloatBuffer inTensorBuffer = Tensor.allocateFloatBuffer(downsampledRecordingLength);
+        for (double val : floatInputBuffer)
             inTensorBuffer.put((float)val);
+        Log.e("LOG", "Create apnea input tensor");
 
-        Tensor inTensor = Tensor.fromBlob(inTensorBuffer, new long[]{1, RECORDING_LENGTH});
-        final String result = module.forward(IValue.from(inTensor)).toStr();
+        // Create Input Tensor
+        Tensor inTensor = Tensor.fromBlob(inTensorBuffer, new long[]{1, downsampledRecordingLength});
+        System.out.println(inTensor.getDataAsFloatArray());
+
+        float[] inTensorAsFloatVec = new float[downsampledRecordingLength];
+        inTensorAsFloatVec = inTensor.getDataAsFloatArray();
+        Log.e("LOG", "Input vector:");
+
+        Log.e("LOG", Arrays.toString(inTensorAsFloatVec));
+        Log.e("LOG", "Calling forward!");
+
+        final IValue result = module.forward(IValue.from(inTensor));
+
+        Tensor raw_out_tensor = result.toTensor();
+        Log.e("LOG", "Predicted output:");
+        Log.e("LOG", Arrays.toString(raw_out_tensor.getDataAsFloatArray())); // [8
 
         return result;
     }
