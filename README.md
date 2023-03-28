@@ -42,6 +42,12 @@ Start Android Studio and import this repository as a project.
 Build and run the app on an Android device. 
 The main file containing the source code is `app/src/main/java/org/pytorch/demo/MainActivity.java`.
 
+NOTE: 
+Because the sample rate by default is 16000, we downsample the recorded signal by 2000 to get a sample rate of 8.
+Then, because we record 15 sec * 8 samples/sec, the input vector is an 120-element vector as expected. 
+
+See https://github.com/vccheng2001/audio_recognition/blob/main/app/src/main/java/org/pytorch/demo/speechrecognition/MainActivity.java#L44 for more details. 
+
 If using the Android emulator:
 
 1. Make sure to turn on the Settings->Microphone->Virtual Microphone Uses Host Input. 
