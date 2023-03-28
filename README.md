@@ -40,6 +40,7 @@ cp apnea.ptl app/src/main/assets
 
 Start Android Studio and import this repository as a project.
 Build and run the app on an Android device. 
+The main file containing the source code is `app/src/main/java/org/pytorch/demo/MainActivity.java`.
 
 If using the Android emulator:
 
