@@ -42,7 +42,8 @@ Start Android Studio and import this repository as a project.
 Build and run the app on an Android device. 
 
 If using the Android emulator:
-    - Make sure to turn on the Settings->Microphone->Virtual Microphone Uses Host Input. 
-    - If the model is updated; wipe the data on the emulator and restart to clear cache.
+
+1. Make sure to turn on the Settings->Microphone->Virtual Microphone Uses Host Input. 
+2. If the model is updated; wipe the data on the emulator and restart to clear cache.
 
 After the app runs, tap the Start button on the UI and start recording audio; after 15 seconds, the model will run inference on the input.
